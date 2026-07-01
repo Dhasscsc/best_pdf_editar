@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PDF திருத்தி - தாஸ் பொது சேவை மையம்</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;700&family=Noto+Serif+Tamil:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --primary:#1a5f3f;
+    --primary-dark:#0f3d28;
+    --accent:#d4a017;
+    --bg:#e9ece7;
+    --panel:#ffffff;
+    --border:#d0d5cf;
+    --text:#22301f;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans Tamil', sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  header{
+    background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+    color:#fff;
+    padding:14px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.15);
+  }
+  header h1{
+    font-size:18px;
+    margin:0;
+    font-weight:700;
+  }
+  header .sub{
+    font-size:12px;
+    opacity:.85;
+  }
+  #uploadBtn, #downloadBtn{
+    background:var(--accent);
+    color:#2a1f00;
+    border:none;
+    padding:9px 16px;
+    border-radius:6px;
+    font-weight:700;
+    cursor:pointer;
+    font-family:inherit;
+    font-size:14px;
+  }
+  #downloadBtn{background:#fff;color:var(--primary-dark);}
+  #uploadBtn:hover, #downloadBtn:hover{filter:brightness(1.08);}
+  #fileInput{display:none;}
+
+  #toolbar{
+    position:sticky;
+    top:0;
+    z-index:50;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    padding:8px 14px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-wrap:wrap;
+    box-shadow:0 2px 6px rgba(0,0,0,.05);
+  }
+  .tbtn{
+    background:#f2f4f0;
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:8px 12px;
+    border-radius:6px;
+    cursor:pointer;
+    font-size:13px;
+    font-family:inherit;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    white-space:nowrap;
+  }
+  .tbtn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
+  .tbtn:hover{filter:brightness(0.97);}
+  .tsep{width:1px;height:26px;background:var(--border);margin:0 4px;}
+  #toolbar input[type=color]{width:34px;height:34px;border:1px solid var(--border);border-radius:6px;padding:2px;cursor:pointer;}
+  #toolbar input[type=range]{width:90px;}
+  #toolbar select{padding:6px;border-radius:6px;border:1px solid var(--border);font-family:inherit;}
+  .tlabel{font-size:12px;color:#555;}
+
+  #dropzone{
+    max-width:700px;
+    margin:60px auto;
+    background:var(--panel);
+    border:2px dashed var(--border);
+    border-radius:14px;
+    padding:60px 30px;
+    text-align:center;
+  }
+  #dropzone.drag{border-color:var(--primary);background:#f0f7f2;}
+  #dropzone h2{margin-top:0;color:var(--primary-dark);}
+  #dropzone p{color:#666;font-size:14px;}
+
+  #pages{
+    max-width:900px;
+    margin:24px auto 80px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:24px;
+  }
+  .page-wrap{
+    position:relative;
+    background:#fff;
+    box-shadow:0 4px 18px rgba(0,0,0,.18);
+    overflow:hidden;
+  }
+  .page-wrap canvas.pdf-layer{display:block;pointer-events:none;}
+  .draw-layer{position:absolute;top:0;left:0;}
+  .overlay-layer{position:absolute;top:0;left:0;right:0;bottom:0;}
+  .page-badge{
+    position:absolute;
+    top:-26px;left:0;
+    font-size:12px;
+    color:#666;
+  }
+  .page-delete{
+    position:absolute;
+    top:6px;right:6px;
+    background:rgba(200,40,40,.85);
+    color:#fff;
+    border:none;
+    border-radius:5px;
+    width:26px;height:26px;
+    cursor:pointer;
+    z-index:20;
+    display:none;
+  }
+  .page-wrap:hover .page-delete{display:block;}
+
+  .text-el{
+    position:absolute;
+    min-width:20px;
+    min-height:1.2em;
+    padding:2px 4px;
+    outline:none;
+    cursor:move;
+    line-height:1.3;
+    white-space:pre-wrap;
+    font-family:'Noto Sans Tamil', sans-serif;
+  }
+  .text-el.selected{outline:2px dashed var(--primary);}
+  .img-el{
+    position:absolute;
+    cursor:move;
+  }
+  .img-el img{width:100%;height:100%;display:block;pointer-events:none;}
+  .img-el.selected{outline:2px dashed var(--primary);}
+  .resize-handle{
+    position:absolute;
+    width:12px;height:12px;
+    background:var(--primary);
+    right:-6px;bottom:-6px;
+    cursor:nwse-resize;
+    border-radius:3px;
+    display:none;
+  }
+  .img-el.selected .resize-handle, .text-el.selected .resize-handle{display:block;}
+
+  #zoomLabel{font-size:13px;min-width:44px;text-align:center;}
+  #pageLoadInfo{
+    text-align:center;
+    color:#666;
+    font-size:13px;
+    margin-top:10px;
+  }
+  footer{
+    text-align:center;
+    color:#888;
+    font-size:12px;
+    padding:20px;
+  }
+  @media (max-width:700px){
+    #pages{padding:0 8px;}
+    header h1{font-size:15px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>PDF திருத்தி</h1>
+    <div class="sub">தாஸ் பொது சேவை மையம் — PDF பதிவேற்றி திருத்தி மீண்டும் PDF ஆக்குங்கள்</div>
+  </div>
+  <div>
+    <button id="uploadBtn">📄 PDF பதிவேற்று</button>
+    <input type="file" id="fileInput" accept="application/pdf">
+    <button id="downloadBtn" style="display:none;">⬇ PDF ஆக பதிவிறக்கு</button>
+  </div>
+</header>
+
+<div id="toolbar" style="display:none;">
+  <button class="tbtn active" data-mode="select">🖱 தேர்வு</button>
+  <button class="tbtn" data-mode="text">🅣 எழுத்து</button>
+  <button class="tbtn" data-mode="draw">✏ வரை</button>
+  <button class="tbtn" data-mode="highlight">🖊 ஹைலைட்</button>
+  <button class="tbtn" id="imgBtn">🖼 படம்</button>
+  <input type="file" id="imgInput" accept="image/*" style="display:none;">
+  <div class="tsep"></div>
+  <span class="tlabel">நிறம்</span>
+  <input type="color" id="colorPicker" value="#1a5f3f">
+  <span class="tlabel">தடிமன்</span>
+  <input type="range" id="widthPicker" min="1" max="30" value="3">
+  <span class="tlabel">எழுத்து அளவு</span>
+  <select id="fontSizeSel">
+    <option value="12">12</option>
+    <option value="14">14</option>
+    <option value="16" selected>16</option>
+    <option value="20">20</option>
+    <option value="24">24</option>
+    <option value="32">32</option>
+    <option value="42">42</option>
+  </select>
+  <div class="tsep"></div>
+  <button class="tbtn" id="deleteSelBtn">🗑 நீக்கு</button>
+  <button class="tbtn" id="undoBtn">↩ Undo</button>
+  <div class="tsep"></div>
+  <button class="tbtn" id="zoomOut">－</button>
+  <span id="zoomLabel">100%</span>
+  <button class="tbtn" id="zoomIn">＋</button>
+  <div class="tsep"></div>
+  <button class="tbtn" id="addPageBtn">➕ காலி பக்கம்</button>
+</div>
+
+<div id="dropzone">
+  <h2>PDF பைலை இங்கே இழுத்து விடுங்கள்</h2>
+  <p>அல்லது மேலே உள்ள "PDF பதிவேற்று" பொத்தானை அழுத்தவும்.<br>
+  பதிவேற்றிய பின், எழுத்து சேர்க்கலாம், வரையலாம், படம் சேர்க்கலாம் — பிறகு திருத்தப்பட்ட PDF ஐ பதிவிறக்கலாம்.</p>
+</div>
+
+<div id="pageLoadInfo"></div>
+<div id="pages"></div>
+
+<footer>தாஸ் பொது சேவை மையம் — Local browser tool, பைல் எதுவும் சர்வருக்கு அனுப்பப்படாது.</footer>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const fileInput = document.getElementById('fileInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const dropzone = document.getElementById('dropzone');
+const toolbar = document.getElementById('toolbar');
+const pagesEl = document.getElementById('pages');
+const pageLoadInfo = document.getElementById('pageLoadInfo');
+const imgInput = document.getElementById('imgInput');
+const imgBtn = document.getElementById('imgBtn');
+const colorPicker = document.getElementById('colorPicker');
+const widthPicker = document.getElementById('widthPicker');
+const fontSizeSel = document.getElementById('fontSizeSel');
+const deleteSelBtn = document.getElementById('deleteSelBtn');
+const undoBtn = document.getElementById('undoBtn');
+const zoomInBtn = document.getElementById('zoomIn');
+const zoomOutBtn = document.getElementById('zoomOut');
+const zoomLabel = document.getElementById('zoomLabel');
+const addPageBtn = document.getElementById('addPageBtn');
+
+let mode = 'select';
+let selectedEl = null;
+let zoom = 1.0;
+let pagesData = []; // {wrap, pdfCanvas, drawCanvas, overlay, widthPx, heightPx}
+let undoStack = [];
+
+uploadBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => { if(e.target.files[0]) loadPdf(e.target.files[0]); });
+
+['dragover','dragleave','drop'].forEach(evt=>{
+  dropzone.addEventListener(evt, e=>{
+    e.preventDefault();
+    if(evt==='dragover') dropzone.classList.add('drag');
+    if(evt==='dragleave') dropzone.classList.remove('drag');
+    if(evt==='drop'){
+      dropzone.classList.remove('drag');
+      const f = e.dataTransfer.files[0];
+      if(f && f.type==='application/pdf') loadPdf(f);
+    }
+  });
+});
+
+async function loadPdf(file){
+  pageLoadInfo.textContent = 'PDF ஏற்றப்படுகிறது...';
+  pagesEl.innerHTML = '';
+  pagesData = [];
+  undoStack = [];
+
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({scale: 2}); // render at higher res for quality
+    const canvas = document.createElement('canvas');
+    canvas.className = 'pdf-layer';
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({canvasContext: ctx, viewport}).promise;
+
+    addPageToDOM(canvas.width, canvas.height, canvas);
+    pageLoadInfo.textContent = `பக்கம் ${i} / ${pdf.numPages} ஏற்றப்பட்டது...`;
+  }
+
+  pageLoadInfo.textContent = `மொத்தம் ${pdf.numPages} பக்கங்கள் ஏற்றப்பட்டன. திருத்தலாம்.`;
+  dropzone.style.display = 'none';
+  toolbar.style.display = 'flex';
+  downloadBtn.style.display = 'inline-block';
+  applyZoom();
+}
+
+function addPageToDOM(widthPx, heightPx, pdfCanvas){
+  const wrap = document.createElement('div');
+  wrap.className = 'page-wrap';
+  wrap.style.width = widthPx+'px';
+  wrap.style.height = heightPx+'px';
+
+  const badge = document.createElement('div');
+  badge.className = 'page-badge';
+  badge.textContent = 'பக்கம் ' + (pagesData.length+1);
+  wrap.appendChild(badge);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'page-delete';
+  delBtn.textContent = '✕';
+  delBtn.title = 'பக்கத்தை நீக்கு';
+  delBtn.onclick = () => {
+    if(!confirm('இந்த பக்கத்தை நீக்கவா?')) return;
+    const idx = pagesData.findIndex(p=>p.wrap===wrap);
+    if(idx>-1) pagesData.splice(idx,1);
+    wrap.remove();
+    renumberPages();
+  };
+  wrap.appendChild(delBtn);
+
+  if(pdfCanvas){
+    wrap.appendChild(pdfCanvas);
+  } else {
+    const blank = document.createElement('canvas');
+    blank.className = 'pdf-layer';
+    blank.width = widthPx; blank.height = heightPx;
+    const bctx = blank.getContext('2d');
+    bctx.fillStyle = '#ffffff';
+    bctx.fillRect(0,0,widthPx,heightPx);
+    wrap.appendChild(blank);
+    pdfCanvas = blank;
+  }
+
+  const drawCanvas = document.createElement('canvas');
+  drawCanvas.className = 'draw-layer';
+  drawCanvas.width = widthPx;
+  drawCanvas.height = heightPx;
+  wrap.appendChild(drawCanvas);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay-layer';
+  wrap.appendChild(overlay);
+
+  pagesEl.appendChild(wrap);
+
+  const pageObj = {wrap, pdfCanvas, drawCanvas, overlay, widthPx, heightPx};
+  pagesData.push(pageObj);
+  setupPageEvents(pageObj);
+  return pageObj;
+}
+
+function renumberPages(){
+  pagesData.forEach((p,idx)=>{
+    const badge = p.wrap.querySelector('.page-badge');
+    if(badge) badge.textContent = 'பக்கம் ' + (idx+1);
+  });
+}
+
+addPageBtn.addEventListener('click', ()=>{
+  addPageToDOM(1654, 2339, null); // A4 at ~200dpi
+  toolbar.style.display = 'flex';
+  downloadBtn.style.display = 'inline-block';
+  dropzone.style.display = 'none';
+  applyZoom();
+});
+
+// ---------- Mode switching ----------
+document.querySelectorAll('.tbtn[data-mode]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tbtn[data-mode]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    mode = btn.dataset.mode;
+    deselect();
+    updatePointerEvents();
+  });
+});
+
+function updatePointerEvents(){
+  pagesData.forEach(p=>{
+    p.drawCanvas.style.pointerEvents = (mode==='draw'||mode==='highlight') ? 'auto':'none';
+    p.overlay.style.pointerEvents = 'auto';
+    p.overlay.style.cursor = mode==='text' ? 'text' : 'default';
+  });
+}
+
+// ---------- Text tool ----------
+function setupPageEvents(pageObj){
+  const {overlay, drawCanvas} = pageObj;
+
+  overlay.addEventListener('click', e=>{
+    if(mode!=='text') return;
+    if(e.target !== overlay) return;
+    const rect = overlay.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+    createTextEl(overlay, x, y);
+  });
+
+  // Drawing
+  let drawing = false;
+  let last = null;
+  const ctx = drawCanvas.getContext('2d');
+
+  function getPos(e){
+    const rect = drawCanvas.getBoundingClientRect();
+    const scaleX = drawCanvas.width / rect.width;
+    const scaleY = drawCanvas.height / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {x:(clientX-rect.left)*scaleX, y:(clientY-rect.top)*scaleY};
+  }
+
+  function startDraw(e){
+    if(mode!=='draw' && mode!=='highlight') return;
+    drawing = true;
+    last = getPos(e);
+    saveUndoSnapshot(pageObj);
+    e.preventDefault();
+  }
+  function moveDraw(e){
+    if(!drawing) return;
+    const pos = getPos(e);
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.lineWidth = parseInt(widthPicker.value) * (mode==='highlight'?3:1);
+    ctx.strokeStyle = colorPicker.value;
+    ctx.globalAlpha = mode==='highlight' ? 0.35 : 1;
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    last = pos;
+    e.preventDefault();
+  }
+  function endDraw(){ drawing=false; last=null; }
+
+  drawCanvas.addEventListener('mousedown', startDraw);
+  drawCanvas.addEventListener('mousemove', moveDraw);
+  window.addEventListener('mouseup', endDraw);
+  drawCanvas.addEventListener('touchstart', startDraw, {passive:false});
+  drawCanvas.addEventListener('touchmove', moveDraw, {passive:false});
+  drawCanvas.addEventListener('touchend', endDraw);
+}
+
+function createTextEl(overlay, x, y, content='உரை...'){
+  const el = document.createElement('div');
+  el.className = 'text-el';
+  el.contentEditable = true;
+  el.style.left = x+'px';
+  el.style.top = y+'px';
+  el.style.color = colorPicker.value;
+  el.style.fontSize = fontSizeSel.value+'px';
+  el.textContent = content;
+  overlay.appendChild(el);
+  makeMovable(el, overlay);
+  el.addEventListener('mousedown', e=>{ if(mode==='select'){ selectElement(el);} });
+  el.addEventListener('dblclick', ()=>{ el.focus(); });
+  selectElement(el);
+  setTimeout(()=>{ el.focus(); document.execCommand('selectAll',false,null); }, 50);
+  // switch to select mode after placing so user can type without accidentally creating more text boxes
+  document.querySelector('.tbtn[data-mode="select"]').click();
+  return el;
+}
+
+// ---------- Image tool ----------
+imgBtn.addEventListener('click', ()=> imgInput.click());
+imgInput.addEventListener('change', e=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    // add to first page by default; user can drag; better: add to page currently in view
+    const targetPage = getPageInView();
+    const overlay = targetPage.overlay;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'img-el';
+    wrapper.style.left = '40px';
+    wrapper.style.top = '40px';
+    wrapper.style.width = '200px';
+    wrapper.style.height = '150px';
+    const img = document.createElement('img');
+    img.src = ev.target.result;
+    wrapper.appendChild(img);
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    wrapper.appendChild(handle);
+    overlay.appendChild(wrapper);
+    makeMovable(wrapper, overlay, handle);
+    wrapper.addEventListener('mousedown', e2=>{ if(mode==='select') selectElement(wrapper); });
+    selectElement(wrapper);
+  };
+  reader.readAsDataURL(f);
+  imgInput.value = '';
+});
+
+function getPageInView(){
+  const scrollMid = window.scrollY + window.innerHeight/2;
+  let best = pagesData[0];
+  let bestDist = Infinity;
+  pagesData.forEach(p=>{
+    const rect = p.wrap.getBoundingClientRect();
+    const mid = rect.top + window.scrollY + rect.height/2;
+    const d = Math.abs(mid - scrollMid);
+    if(d < bestDist){ bestDist = d; best = p; }
+  });
+  return best;
+}
+
+// ---------- Movable / resizable ----------
+function makeMovable(el, overlay, resizeHandle){
+  let dragging=false, resizing=false, startX,startY, origLeft, origTop, origW, origH;
+
+  el.addEventListener('mousedown', e=>{
+    if(mode!=='select') return;
+    if(resizeHandle && e.target===resizeHandle) return;
+    if(el.classList.contains('text-el') && document.activeElement===el) return;
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    origLeft = parseFloat(el.style.left)||0;
+    origTop = parseFloat(el.style.top)||0;
+    e.stopPropagation();
+  });
+
+  if(resizeHandle){
+    resizeHandle.addEventListener('mousedown', e=>{
+      resizing = true;
+      startX = e.clientX; startY = e.clientY;
+      origW = el.offsetWidth; origH = el.offsetHeight;
+      e.stopPropagation(); e.preventDefault();
+    });
+  }
+
+  window.addEventListener('mousemove', e=>{
+    if(dragging){
+      const dx = (e.clientX-startX)/zoom;
+      const dy = (e.clientY-startY)/zoom;
+      el.style.left = (origLeft+dx)+'px';
+      el.style.top = (origTop+dy)+'px';
+    }
+    if(resizing){
+      const dx = (e.clientX-startX)/zoom;
+      const dy = (e.clientY-startY)/zoom;
+      el.style.width = Math.max(20, origW+dx)+'px';
+      el.style.height = Math.max(20, origH+dy)+'px';
+    }
+  });
+  window.addEventListener('mouseup', ()=>{ dragging=false; resizing=false; });
+}
+
+// ---------- Selection ----------
+function selectElement(el){
+  deselect();
+  selectedEl = el;
+  el.classList.add('selected');
+}
+function deselect(){
+  if(selectedEl) selectedEl.classList.remove('selected');
+  selectedEl = null;
+}
+document.addEventListener('mousedown', e=>{
+  if(e.target.closest('#toolbar') || e.target.closest('header')) return;
+  if(mode==='select' && !e.target.closest('.text-el') && !e.target.closest('.img-el')){
+    deselect();
+  }
+});
+deleteSelBtn.addEventListener('click', ()=>{
+  if(selectedEl){ selectedEl.remove(); selectedEl=null; }
+});
+document.addEventListener('keydown', e=>{
+  if((e.key==='Delete'||e.key==='Backspace') && selectedEl && document.activeElement!==selectedEl){
+    selectedEl.remove(); selectedEl=null;
+  }
+});
+
+// live style updates for selected element
+colorPicker.addEventListener('input', ()=>{
+  if(selectedEl && selectedEl.classList.contains('text-el')) selectedEl.style.color = colorPicker.value;
+});
+fontSizeSel.addEventListener('change', ()=>{
+  if(selectedEl && selectedEl.classList.contains('text-el')) selectedEl.style.fontSize = fontSizeSel.value+'px';
+});
+
+// ---------- Undo (drawing only, simple snapshot) ----------
+function saveUndoSnapshot(pageObj){
+  const ctx = pageObj.drawCanvas.getContext('2d');
+  const snap = ctx.getImageData(0,0,pageObj.drawCanvas.width,pageObj.drawCanvas.height);
+  undoStack.push({pageObj, snap});
+  if(undoStack.length>30) undoStack.shift();
+}
+undoBtn.addEventListener('click', ()=>{
+  const last = undoStack.pop();
+  if(!last) return;
+  const ctx = last.pageObj.drawCanvas.getContext('2d');
+  ctx.putImageData(last.snap, 0, 0);
+});
+
+// ---------- Zoom ----------
+function applyZoom(){
+  pagesEl.style.transform = `scale(${zoom})`;
+  pagesEl.style.transformOrigin = 'top center';
+  zoomLabel.textContent = Math.round(zoom*100)+'%';
+}
+zoomInBtn.addEventListener('click', ()=>{ zoom = Math.min(2, zoom+0.1); applyZoom(); });
+zoomOutBtn.addEventListener('click', ()=>{ zoom = Math.max(0.3, zoom-0.1); applyZoom(); });
+
+// ---------- Export to PDF ----------
+downloadBtn.addEventListener('click', async ()=>{
+  if(pagesData.length===0) return;
+  downloadBtn.disabled = true;
+  downloadBtn.textContent = '⏳ தயார் செய்கிறது...';
+  deselect();
+
+  // ensure fonts loaded before rasterizing
+  try{ await document.fonts.ready; }catch(e){}
+
+  const oldZoom = zoom;
+  zoom = 1; applyZoom();
+  await new Promise(r=>setTimeout(r, 150));
+
+  const { jsPDF } = window.jspdf;
+  let pdfOut = null;
+
+  for(let i=0;i<pagesData.length;i++){
+    const p = pagesData[i];
+    // hide delete button + selection outlines while capturing
+    const delBtn = p.wrap.querySelector('.page-delete');
+    const prevDisplay = delBtn.style.display;
+    delBtn.style.display = 'none';
+
+    const canvas = await html2canvas(p.wrap, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      width: p.widthPx,
+      height: p.heightPx,
+      windowWidth: p.widthPx,
+      windowHeight: p.heightPx
+    });
+    delBtn.style.display = prevDisplay;
+
+    const imgData = canvas.toDataURL('image/png');
+    const pxW = p.widthPx, pxH = p.heightPx;
+
+    if(i===0){
+      pdfOut = new jsPDF({unit:'px', format:[pxW, pxH], hotfixes:['px_scaling']});
+    } else {
+      pdfOut.addPage([pxW, pxH]);
+    }
+    pdfOut.addImage(imgData, 'PNG', 0, 0, pxW, pxH);
+  }
+
+  zoom = oldZoom; applyZoom();
+
+  pdfOut.save('திருத்தப்பட்ட-ஆவணம்.pdf');
+  downloadBtn.disabled = false;
+  downloadBtn.textContent = '⬇ PDF ஆக பதிவிறக்கு';
+});
+
+updatePointerEvents();
+</script>
+</body>
+</html>
